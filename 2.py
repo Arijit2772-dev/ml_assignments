@@ -1,98 +1,145 @@
-# 2 (a)
+"""
+Lab Assignment 6 - Question 2
+GridSearchCV for K-NN Classifier Hyperparameter Tuning
+"""
 
 import numpy as np
+import pandas as pd  # Add this import
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-#The array
-array = np.array([[1, 2, 3], [-4, 5, -6]]) #
+# Load dataset
+iris = load_iris()
+X = iris.data
+y = iris.target
 
-print("--- Solutions for Q2(a) ---")
-print(f"Original Array:\n{array}")
+# Split the data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-# i. Find element-wise absolute value
-abs_array = np.absolute(array)
-print(f"\ni. Element-wise absolute value:\n{abs_array}")
+print("="*70)
+print("GRIDSEARCHCV FOR K-NN CLASSIFIER")
+print("="*70)
+print(f"Dataset: Iris")
+print(f"Training samples: {X_train.shape[0]}")
+print(f"Testing samples: {X_test.shape[0]}")
+print("="*70)
 
-# ii. Find the 25th, 50th, and 75th percentile
-print("\n--- Part (a)(ii) Percentiles ---")
-percentiles_to_find = [25, 50, 75]
+# Define parameter grid for K values
+param_grid = {
+    'n_neighbors': list(range(1, 31)),  # K values from 1 to 30
+    'weights': ['uniform', 'distance'],  # Weight functions
+    'metric': ['euclidean', 'manhattan']  # Distance metrics
+}
 
-# For flattened array
-p_flat = np.percentile(array, percentiles_to_find)
-print(f"Percentiles of flattened array (25th, 50th, 75th): {p_flat}")
-  #<-- Row 0 = 25th percentile of each column
-  #<-- Row 1 = 50th percentile of each column
- #<-- Row 2 = 75th percentile of each column
+print("\nParameter Grid:")
+print(f"  n_neighbors: {param_grid['n_neighbors']}")
+print(f"  weights: {param_grid['weights']}")
+print(f"  metric: {param_grid['metric']}")
+print(f"\nTotal combinations: {len(param_grid['n_neighbors']) * len(param_grid['weights']) * len(param_grid['metric'])}")
 
-# For each column (axis=0)
-p_cols = np.percentile(array, percentiles_to_find, axis=0)
-print(f"\nPercentiles for each column:\n{p_cols}")
+# Create K-NN classifier
+knn = KNeighborsClassifier()
 
-# For each row (axis=1)
-p_rows = np.percentile(array, percentiles_to_find, axis=1)
-print(f"\nPercentiles for each row:\n{p_rows}")
+# Perform GridSearchCV
+print("\nPerforming GridSearchCV with 5-fold cross-validation...")
+grid_search = GridSearchCV(
+    estimator=knn,
+    param_grid=param_grid,
+    cv=5,  # 5-fold cross-validation
+    scoring='accuracy',
+    verbose=1,
+    n_jobs=-1  # Use all available cores
+)
 
+# Fit GridSearchCV
+grid_search.fit(X_train, y_train)
 
-# iii. Mean, Median and Standard Deviation
-print("\n--- Part (a)(iii) Mean, Median, Standard Deviation ---")
+print("\n" + "="*70)
+print("GRIDSEARCHCV RESULTS")
+print("="*70)
+print(f"\nBest Parameters: {grid_search.best_params_}")
+print(f"Best Cross-Validation Score: {grid_search.best_score_:.4f}")
+print(f"Best K value: {grid_search.best_params_['n_neighbors']}")
 
-# For flattened array
-mean_flat = np.mean(array)
-median_flat = np.median(array)
-std_flat = np.std(array)
-print(f"\nStats for flattened array:")
-print(f"  Mean: {mean_flat:.4f}, Median: {median_flat:.4f}, Std Dev: {std_flat:.4f}")
+# Test the best model
+best_knn = grid_search.best_estimator_
+y_pred = best_knn.predict(X_test)
+test_accuracy = accuracy_score(y_test, y_pred)
 
-# For each column (axis=0)
-mean_cols = np.mean(array, axis=0)
-median_cols = np.median(array, axis=0)
-std_cols = np.std(array, axis=0)
-print(f"\nStats for each column:")
-print(f"  Means: {mean_cols}")
-print(f"  Medians: {median_cols}")
-print(f"  Std Devs: {std_cols}")
+print(f"\nTest Set Accuracy: {test_accuracy:.4f}")
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=iris.target_names))
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
 
-# For each row (axis=1)
-mean_rows = np.mean(array, axis=1)
-median_rows = np.median(array, axis=1)
-std_rows = np.std(array, axis=1)
-print(f"\nStats for each row:")
-print(f"  Means: {mean_rows}")
-print(f"  Medians: {median_rows}")
-print(f"  Std Devs: {std_rows}")
+# Display top 10 parameter combinations
+print("\n" + "="*70)
+print("TOP 10 PARAMETER COMBINATIONS")
+print("="*70)
+results_df = pd.DataFrame(grid_search.cv_results_)
+top_10 = results_df.nlargest(10, 'mean_test_score')[['param_n_neighbors', 'param_weights', 'param_metric', 'mean_test_score', 'std_test_score']]
+print(top_10.to_string(index=False))
 
+# Visualizations
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
+# Plot 1: K value vs Accuracy for different weights (euclidean)
+euclidean_uniform = results_df[(results_df['param_metric'] == 'euclidean') & (results_df['param_weights'] == 'uniform')]
+euclidean_distance = results_df[(results_df['param_metric'] == 'euclidean') & (results_df['param_weights'] == 'distance')]
 
-# 2 (b)
+axes[0, 0].plot(euclidean_uniform['param_n_neighbors'], euclidean_uniform['mean_test_score'], 
+                marker='o', label='Uniform', linewidth=2)
+axes[0, 0].plot(euclidean_distance['param_n_neighbors'], euclidean_distance['mean_test_score'], 
+                marker='s', label='Distance', linewidth=2)
+axes[0, 0].axvline(grid_search.best_params_['n_neighbors'], color='red', 
+                   linestyle='--', label=f"Best K = {grid_search.best_params_['n_neighbors']}")
+axes[0, 0].set_xlabel('K (Number of Neighbors)')
+axes[0, 0].set_ylabel('Cross-Validation Accuracy')
+axes[0, 0].set_title('K vs Accuracy (Euclidean Distance)')
+axes[0, 0].legend()
+axes[0, 0].grid(alpha=0.3)
 
+# Plot 2: K value vs Accuracy for different metrics (uniform)
+uniform_euclidean = results_df[(results_df['param_weights'] == 'uniform') & (results_df['param_metric'] == 'euclidean')]
+uniform_manhattan = results_df[(results_df['param_weights'] == 'uniform') & (results_df['param_metric'] == 'manhattan')]
 
+axes[0, 1].plot(uniform_euclidean['param_n_neighbors'], uniform_euclidean['mean_test_score'], 
+                marker='o', label='Euclidean', linewidth=2)
+axes[0, 1].plot(uniform_manhattan['param_n_neighbors'], uniform_manhattan['mean_test_score'], 
+                marker='s', label='Manhattan', linewidth=2)
+axes[0, 1].set_xlabel('K (Number of Neighbors)')
+axes[0, 1].set_ylabel('Cross-Validation Accuracy')
+axes[0, 1].set_title('K vs Accuracy (Uniform Weights)')
+axes[0, 1].legend()
+axes[0, 1].grid(alpha=0.3)
 
-# The array given in the assignment
-a = np.array([-1.8, -1.6, -0.5, 0.5, 1.6, 1.8, 3.0]) # 
+# Plot 3: Heatmap of mean scores
+pivot_table = results_df[results_df['param_metric'] == 'euclidean'].pivot_table(
+    values='mean_test_score', 
+    index='param_weights', 
+    columns='param_n_neighbors'
+)
+sns.heatmap(pivot_table, annot=False, cmap='YlGnBu', ax=axes[1, 0], cbar_kws={'label': 'Accuracy'})
+axes[1, 0].set_title('Accuracy Heatmap (Euclidean Distance)')
+axes[1, 0].set_xlabel('K (Number of Neighbors)')
+axes[1, 0].set_ylabel('Weight Function')
 
-print("--- Solutions for Q2(b) ---")
-print(f"Original array: {a}")
+# Plot 4: Confusion Matrix
+cm = confusion_matrix(y_test, y_pred)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=iris.target_names, yticklabels=iris.target_names, ax=axes[1, 1])
+axes[1, 1].set_title(f'Confusion Matrix (Best Model: K={grid_search.best_params_["n_neighbors"]})')
+axes[1, 1].set_ylabel('True Label')
+axes[1, 1].set_xlabel('Predicted Label')
 
-# np.floor(): Rounds down to the nearest integer.
-floor_vals = np.floor(a)
-print(f"Floor values:   {floor_vals}")
+plt.tight_layout()
+plt.savefig('gridsearch_knn_results.png', dpi=300, bbox_inches='tight')
+print("\n✓ Visualization saved!")
 
-# np.ceil(): Rounds up to the nearest integer.
-ceil_vals = np.ceil(a)
-print(f"Ceiling values: {ceil_vals}")
-
-# np.trunc(): Chops off the decimal, rounding toward zero.
-trunc_vals = np.trunc(a)
-print(f"Truncated values: {trunc_vals}")
-
-# np.round(): Rounds to the nearest integer (halfway values to the nearest even integer).
-rounded_vals = np.round(a)
-print(f"Rounded values:   {rounded_vals}")
-
-
-
-
-
-
-
-
-
+print("\n" + "="*70)
+print("GRIDSEARCHCV COMPLETE!")
+print("="*70)
